@@ -9,6 +9,31 @@ ofstream object_code;
 
 int PASS2_E=0;
 	
+string upper_case(string name ){
+	//string name = "john doe"; //or just get string from user...
+	for(int i = 0; i < name.size(); i++) {
+    	name.at(i) = toupper(name.at(i));
+	}
+	return name;
+}
+
+string string_to_hex(string input)
+{
+    static const char* const lut = "0123456789ABCDEF";
+    size_t len = input.length();
+
+	string output;
+    output.reserve(2 * len);
+    for (size_t i = 0; i < len; ++i)
+    {
+        const unsigned char c = input[i];
+        output.push_back(lut[c >> 4]);
+        output.push_back(lut[c & 15]);
+    }
+    return output;
+}
+
+
 vector<string> parse_operand(string operand){
 	char * temp;
 	temp = strtok((char*)operand.c_str(),", \t");
@@ -20,7 +45,11 @@ vector<string> parse_operand(string operand){
 	return ops;
 }
 
-
+string int_hex(int n, int width){
+	stringstream ss;
+	ss  << setfill('0') << setw(width) << hex << n;
+	return ss.str();
+}	
 
 bool is_num(string s){
 	if(s.empty() || ((!isdigit(s[0])) && (s[0] != '-') && (s[0] != '+'))) return false ;
@@ -30,20 +59,25 @@ bool is_num(string s){
 	return (*p == 0) ;
 }
 
-void write_line(int i, int obc){
+void write_line(int i, string obc){
 	listing << setw(4) << left << i*5;
+	listing << setw(4) << setfill('0') << right << hex << code_table[i].loc << " " << setfill(' ')  << dec;
 	listing << setw(8) << left << code_table[i].label;
 	listing << setw(8) << left << code_table[i].opcode;
-	listing << setw(8) << left << code_table[i].operand;
-	listing << setw(8) << left << hex << obc << dec << endl;
+	listing << setw(10) << left << code_table[i].operand;
+	listing << setw(8) << left << upper_case(obc) << endl;
 }
 
 
 void write_line(int i){
-	listing << setw(4) << left << i*5;
+	listing << setw(9) << left << i*5;
 	listing << setw(8) << left << code_table[i].label;
 	listing << setw(8) << left << code_table[i].opcode;
 	listing << setw(8) << left << code_table[i].operand << endl;
+}
+
+void write_comment(int i){
+	listing  << left << setw(4) << i*5 << "     " << left << code_table[i].com_line << endl;
 }
 
 
@@ -55,9 +89,11 @@ void pass2(string asmfile){
 	string label, opcode, operand;
 	int loc;
 	while (code_table[j].com_line[0]=='.'){
+		write_comment(j);
 		j++;
 	}
 	int idx=0;
+	idx=j;
 	if (code_table[j].opcode=="START"){
 		idx=j;
 		label = code_table[idx].label;
@@ -71,6 +107,7 @@ void pass2(string asmfile){
 	int pc;
 	pc = code_table[idx+1].loc;
 	int base;
+	bool isBase=false;
 	for ( ; idx<code_table.size(); idx++){
 		pc = code_table[idx+1].loc;
 		label = code_table[idx].label;
@@ -78,8 +115,11 @@ void pass2(string asmfile){
 		operand = code_table[idx].operand;
 		loc = code_table[idx].loc;
 		int n,i,x,b,p,e;
-		bool isBase;
+		string asm_final;
 		n=i=1;
+		e=0;
+		b=p=0;
+		x=0;
 		if ((code_table[idx].com_line=="")){
 			if (OPTAB[opcode] > 2){
 				vector<string> ops;
@@ -93,56 +133,73 @@ void pass2(string asmfile){
 					i=0;
 					operand = operand.substr(1,operand.length());
 				}
-				if (operand[0]=='#'){
+				else if (operand[0]=='#'){
 					n=0;
 					i=1;
 					operand = operand.substr(1,operand.length());
 				}
-				if (ops.size()==2 and ops[1][0]=='X'){
-					n=1;
-					i=1;
-					x=1;
-					operand = (string)(ops[0]);
-					//cout << operand;
+				else if (ops.size()==2){
+					if (ops[1][0]=='X'){
+						n=1;
+						i=1;
+						x=1;
+						operand = (string)(ops[0]);
+						//cout << operand;
+					}
 				}
 				int opaddr;
-				if (SYMTAB.count(operand)!=0){
+				int isConst=0;
+				if (SYMTAB[operand].y==1){
 					opaddr = SYMTAB[operand].loc;
 				}
+				else if (LITTAB[operand].found==1){
+					opaddr = LITTAB[operand].loc;
+				}
 				else if (n==0 and i==1 and is_num(operand)){
+					cout << "im "; 
 					opaddr = stoi(operand);
+					cout << opaddr << " " << operand << endl;
+					b=p=0;
+					isConst=1;
 				}
 				else{
 					opaddr=0;
 					PASS2_E=1;
 				}
-				if (opaddr-pc<2048 and opaddr-pc>=-2048 ){
-					b=0;
+				if ((e==0) and (!isConst )and (opaddr-pc<2048 and opaddr-pc>=-2048) ){
+					b=0;	
 					p=1;
 					opaddr = opaddr-pc;
 				}
-				else if (isBase){
+				else if ((e==0) and isBase and !isConst){
 					if (0<=opaddr-base<4096){
 						b=1;
 						p=0;
 						opaddr = opaddr-base;
 					}
-					else{
-						mod_record.push_back(loc+1<<8 + (3+e)*2-3);
-					}
 				}
-				else{
-					mod_record.push_back(loc+1<<8 + (3+e)*2-3);
+				if (!isConst and p==0 and b==0){
+					mod_record.push_back((loc+1<<8) + (3+e)*2-3);
+				}
+				if (operand==""){
+					opaddr=0;
+				}
+				if (opcode=="RSUB"){
+					n=i=1;
+					x=p=b=0;
 				}
 				int asm_code;
 				if (e==0){
+					cout << opaddr << endl;
 					asm_code = (OPCODETAB[opcode] << 16) + (n << 17) + (i << 16) + (x << 15) + (b << 14) + (p << 13) + (e << 12) + (opaddr&0xfff);
-					asm_code = asm_code && 0xffffff;
+					asm_code = asm_code & 0xffffff;
 				}
 				else{
 					asm_code = (((OPCODETAB[opcode] << 16) + (n << 17) + (i << 16) + (x << 15) + (b << 14) + (p << 13) + (e << 12)) << 8) + (opaddr&0xfffff);
+					asm_code = asm_code & 0xffffffff;
 				}
-				code_table[idx].asm_code=asm_code;
+				cout << n << i << x << b << p << e << endl;
+				code_table[idx].asm_code=int_hex(asm_code,(3+e)*2);
 			}
 			else if (OPTAB[opcode] == 2){
 				vector<string> ops;
@@ -151,17 +208,91 @@ void pass2(string asmfile){
 				if (ops.size()==2 and (REGISTERS[ops[0]] or ops[0]=="A") and (REGISTERS[ops[1]] or ops[1]=="A")){
 					asm_code = (OPCODETAB[opcode] << 8) + (REGISTERS[ops[0]] << 4) + (REGISTERS[ops[1]]);
 				}
-				else{
+				else if (ops.size()==1 and (REGISTERS[ops[0]] or ops[0]=="A")){
 					//error
-					asm_code = (OPCODETAB[opcode] << 8);
+					asm_code = (OPCODETAB[opcode] << 8) + (REGISTERS[ops[0]] << 4);
 				}
-				code_table[idx].asm_code=asm_code;
+				else{
+					asm_code = (OPCODETAB[opcode] << 8) ;	
+				}
+				if (ops.size()==2 and (REGISTERS[ops[0]] or ops[0]=="A") and (is_num(ops[1]) and opcode.substr(5)=="SHIFT")){
+					asm_code = (OPCODETAB[opcode] << 8) + (REGISTERS[ops[0]] << 4) + stoi(ops[1])-1;
+				}
+				else if (ops.size()==1 and (REGISTERS[ops[0]] or ops[0]=="A")){
+					//error
+					asm_code = (OPCODETAB[opcode] << 8) + (REGISTERS[ops[0]] << 4);
+				}
+				else {
+					asm_code = (OPCODETAB[opcode] << 8) ;	
+				}
+				code_table[idx].asm_code=int_hex(asm_code,2*2);
 			}
 			else if (OPTAB[opcode] == 1){
 				int asm_code;
+				code_table[idx].asm_code=int_hex(OPCODETAB[opcode],2);
 			}
+			else if (opcode[0]=='=' and opcode[2]=='\'' and opcode[opcode.length()-1] == '\'' and (opcode[1] == 'X' or opcode[1] == 'C')){
+				int asm_code;
+				if (opcode[1]=='C'){
+					code_table[idx].asm_code=string_to_hex(opcode.substr(3,opcode.length()-4));
+				}
+				else{
+					code_table[idx].asm_code=(opcode.substr(3,opcode.length()-4));
+				}
+			}
+			else if (opcode=="WORD"){
+				int asm_code;
+				asm_code = stoi(operand);
+				code_table[idx].asm_code=int_hex(asm_code,6);
+			}
+			else if (opcode=="BYTE"){
+				string temp;
+				if (operand[0]=='C'){
+					temp=string_to_hex(operand.substr(2,operand.length()-1-2));
+				}
+				else if (operand[0]=='X'){
+					cout << endl << operand << endl;
+					temp = operand.substr(2,operand.length()-2-1);
+				}
+				else{
+					temp = "00";
+				}
+				code_table[idx].asm_code=temp;
+			}
+			else if (opcode=="BASE"){
+				base = SYMTAB[operand].loc;
+				isBase=true;
+			}
+
+			write_line(idx,code_table[idx].asm_code);
+
+		}
+		else{
+			write_comment(idx);
+		}
+
+	}
+	string T="";
+	int Tl;
+	for (int i=j; i<code_table.size(); i++){
+		if ((code_table[i].asm_code+T).length()<=60 and code_table[i].asm_code != ""){
+			if (T==""){
+				Tl = code_table[i].loc;
+			}
+			T = T+code_table[i].asm_code;
+		}
+		else if (T!=""){
+			object_code << "T" << setw(6) << setfill('0') << uppercase << right << hex <<(Tl);
+			object_code << setw(2) << setfill('0') << T.length()/2;
+			object_code << setw(60) << setfill(' ') << left << upper_case(T) << endl; 
+			T="";
 		}
 	}
+
+	for (int q=0; q<mod_record.size(); q++){
+		object_code << 'M' << setfill('0') << right << setw(8)<< hex <<mod_record[q] << endl;
+	}
+	object_code << "E" << setfill('0') << setw(6) << right << hex << code_table[j].loc << endl;
 	listing.close();
 	object_code.close();
 }
@@ -172,10 +303,13 @@ int main(int argc, char* argv[]){
 		return 1;
 	}
 	pass1(argv[1]);
-	for (int i=0; i<code_table.size(); i++){
-		printf("%04x| %20s| %8s| %8s| %8s| %s\n", code_table[i].loc,code_table[i].com_line.c_str(),code_table[i].label.c_str(), code_table[i].opcode.c_str(), code_table[i].operand.c_str(),code_table[i].comment.c_str());
-	}
+	
 	cout << PASS1_E;
 	pass2(argv[1]);
+	for (int i=0; i<code_table.size(); i++){
+		printf("%04x| %20s| %8s| %8s| %8s| %8s\n", code_table[i].loc,code_table[i].com_line.c_str(),code_table[i].label.c_str(), code_table[i].opcode.c_str(), code_table[i].operand.c_str(),code_table[i].asm_code.c_str());
+	}
+	//write_object_code();
+	cout << hex << LOCCTR << dec << endl;
 	return 0;
 }

@@ -7,6 +7,18 @@ using namespace std;
 struct symtab_struct{
 	bool e;
 	int loc;
+	int y;
+};
+
+struct littab_struct{
+	int loc;
+	int found;
+	int length;
+	int written;
+	littab_struct(){
+		length=found=written=0;
+
+	}
 };
 
 struct table_struct{
@@ -15,11 +27,12 @@ struct table_struct{
 	string operand;
 	string comment;
 	string com_line;
-	int asm_code;
+	string asm_code;
 	int loc;
 };
 
 map<string,symtab_struct> SYMTAB;
+map<string,littab_struct> LITTAB;
 int LOCCTR;
 int PASS1_E=0;
 
@@ -123,18 +136,58 @@ int pass1(string asmfile){
 
 	for ( ; i<code_table.size(); i++){
 		if (code_table[i].opcode=="END"){
-			code_table[i].loc=0;
+			code_table[i].loc=LOCCTR;
+			int li=0;
+			for (auto temp : LITTAB){
+				string lit;
+				lit = temp.first;
+				
+				if (LITTAB[lit].found and !LITTAB[lit].written){
+					table_struct litemp;
+					litemp.loc = LOCCTR;
+					litemp.opcode = lit;
+					code_table.insert(code_table.begin()+i+li+1,litemp);
+					li++;
+					LITTAB[lit].loc=LOCCTR;
+					LITTAB[lit].written=1;
+					LOCCTR+=LITTAB[lit].length;
+					i++;
+				}
+				cout << lit << " " << hex << LITTAB[lit].loc<< endl ;
+			}
 			break;
 		}
 		code_table[i].loc=LOCCTR;
+		int isLit=0;
+		if (code_table[i].operand[0] == '='){
+			string temp;
+			cout << "LIT\n";
+			temp = code_table[i].operand;
+			if (temp[2]=='\'' and temp[temp.length()-1] == '\'' and (temp[1] == 'X' or temp[1] == 'C')){
+				if (!LITTAB[temp].found){
+					LITTAB[temp].found=1;
+					cout << "LIT\n";
+					if (temp[1]=='X'){
+						LITTAB[temp].length = (temp.length()-4+1)/2;
+						cout << LITTAB[temp].length;
+					}
+					else{
+						LITTAB[temp].length = (temp.length()-4);	
+					}
+					isLit=1;
+				}
+			}
+		}
 		if (code_table[i].label != ""){
-			if (SYMTAB.count(code_table[i].label) > 0){
+			
+			if (SYMTAB.count(code_table[i].label) > 0 ){
 				SYMTAB[code_table[i].label].e=1;
 			}
-			else{
+			else {
 				symtab_struct temp;
 				temp.e=0;
 				temp.loc=LOCCTR;
+				temp.y=1;
 				SYMTAB[code_table[i].label] = temp;
 			}
 		}
@@ -163,6 +216,26 @@ int pass1(string asmfile){
 				}
 				else if (temp[0] == 'X'){
 					LOCCTR+=(temp.length()-2)/2;
+				}
+			}
+			else if (code_table[i].opcode == "BASE"){
+
+			}
+			else if (code_table[i].opcode == "LTORG"){
+				int li=0;
+				for (auto temp : LITTAB){
+					string lit;
+					lit = temp.first;
+					if (LITTAB[lit].found and !LITTAB[lit].written){
+						table_struct litemp;
+						litemp.loc = LOCCTR;
+						litemp.opcode = lit;
+						code_table.insert(code_table.begin()+i+1+li,litemp);
+						LITTAB[lit].loc=LOCCTR;
+						LITTAB[lit].written=1;
+						LOCCTR+=LITTAB[lit].length;
+						i+=1;
+					}
 				}
 			}
 			else{
