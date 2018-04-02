@@ -5,6 +5,7 @@
 using namespace std;
 
 ofstream listing;
+
 ofstream object_code;
 
 int PASS2_E=0;
@@ -51,13 +52,6 @@ string int_hex(int n, int width){
 	return ss.str();
 }	
 
-bool is_num(string s){
-	if(s.empty() || ((!isdigit(s[0])) && (s[0] != '-') && (s[0] != '+'))) return false ;
-
-	char * p ;
-	strtol(s.c_str(), &p, 10) ;
-	return (*p == 0) ;
-}
 
 void write_line(int i, string obc){
 	listing << setw(4) << left << i*5;
@@ -85,6 +79,7 @@ void pass2(string asmfile){
 	vector<int> mod_record;
 	listing.open(asmfile+".list");
 	object_code.open(asmfile+".out");
+	error_file.open(asmfile+".err");
 	int j=0;
 	string label, opcode, operand;
 	int loc;
@@ -144,7 +139,6 @@ void pass2(string asmfile){
 						i=1;
 						x=1;
 						operand = (string)(ops[0]);
-						//cout << operand;
 					}
 				}
 				int opaddr;
@@ -156,9 +150,7 @@ void pass2(string asmfile){
 					opaddr = LITTAB[operand].loc;
 				}
 				else if (n==0 and i==1 and is_num(operand)){
-					cout << "im "; 
 					opaddr = stoi(operand);
-					cout << opaddr << " " << operand << endl;
 					b=p=0;
 					isConst=1;
 				}
@@ -190,7 +182,6 @@ void pass2(string asmfile){
 				}
 				int asm_code;
 				if (e==0){
-					cout << opaddr << endl;
 					asm_code = (OPCODETAB[opcode] << 16) + (n << 17) + (i << 16) + (x << 15) + (b << 14) + (p << 13) + (e << 12) + (opaddr&0xfff);
 					asm_code = asm_code & 0xffffff;
 				}
@@ -198,7 +189,6 @@ void pass2(string asmfile){
 					asm_code = (((OPCODETAB[opcode] << 16) + (n << 17) + (i << 16) + (x << 15) + (b << 14) + (p << 13) + (e << 12)) << 8) + (opaddr&0xfffff);
 					asm_code = asm_code & 0xffffffff;
 				}
-				cout << n << i << x << b << p << e << endl;
 				code_table[idx].asm_code=int_hex(asm_code,(3+e)*2);
 			}
 			else if (OPTAB[opcode] == 2){
@@ -251,17 +241,21 @@ void pass2(string asmfile){
 					temp=string_to_hex(operand.substr(2,operand.length()-1-2));
 				}
 				else if (operand[0]=='X'){
-					cout << endl << operand << endl;
 					temp = operand.substr(2,operand.length()-2-1);
 				}
 				else{
 					temp = "00";
+					error_file << "Error at line " << idx+1 << ": " << "Constant with invalid format \'" << operand << '\'' << endl;
 				}
 				code_table[idx].asm_code=temp;
 			}
 			else if (opcode=="BASE"){
 				base = SYMTAB[operand].loc;
 				isBase=true;
+			}
+			else if (opcode=="NOBASE"){
+				base = 0;
+				isBase = false;
 			}
 
 			write_line(idx,code_table[idx].asm_code);
@@ -302,14 +296,14 @@ int main(int argc, char* argv[]){
 		cout << "Usage: sicasm <input-file>\n";
 		return 1;
 	}
+	error_file.open(string(argv[1])+".err");
 	pass1(argv[1]);
-	
-	cout << PASS1_E;
 	pass2(argv[1]);
-	for (int i=0; i<code_table.size(); i++){
-		printf("%04x| %20s| %8s| %8s| %8s| %8s\n", code_table[i].loc,code_table[i].com_line.c_str(),code_table[i].label.c_str(), code_table[i].opcode.c_str(), code_table[i].operand.c_str(),code_table[i].asm_code.c_str());
-	}
-	//write_object_code();
-	cout << hex << LOCCTR << dec << endl;
+
+	cout << "Intermidiate file : " << argv[1] << ".int" << endl;
+	cout << "Listing file      : " << argv[1] << ".list" << endl;
+	cout << "Object Code file  : " << argv[1] << ".out" << endl;
+	cout << "Error file        : " << argv[1] << ".err" << endl;
+	error_file.close();
 	return 0;
 }

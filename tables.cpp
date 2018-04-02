@@ -113,6 +113,7 @@ map<string,int> DIRECTIVES = {
 	{"BYTE",1},
 	{"END",1},
 	{"BASE",1},
+	{"NOBASE",1},
 	{"ORG",1},
 	{"EQU",1},
 	{"LTORG",1}

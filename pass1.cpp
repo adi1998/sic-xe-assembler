@@ -4,6 +4,9 @@
 
 using namespace std;
 
+ofstream error_file;
+ofstream int_file;
+
 struct symtab_struct{
 	bool e;
 	int loc;
@@ -31,6 +34,15 @@ struct table_struct{
 	int loc;
 };
 
+
+bool is_num(string s){
+	if(s.empty() || ((!isdigit(s[0])) && (s[0] != '-') && (s[0] != '+'))) return false ;
+
+	char * p ;
+	strtol(s.c_str(), &p, 10) ;
+	return (*p == 0) ;
+}
+
 map<string,symtab_struct> SYMTAB;
 map<string,littab_struct> LITTAB;
 int LOCCTR;
@@ -39,6 +51,20 @@ int PASS1_E=0;
 vector<string> codeLines;
 
 vector<table_struct> code_table;
+
+
+void write_line_int(int i){
+	int_file << setw(4) << left << i*5;
+	int_file << setw(4) << setfill('0') << right << hex << code_table[i].loc << " " << setfill(' ')  << dec;
+	int_file << setw(8) << left << code_table[i].label;
+	int_file << setw(8) << left << code_table[i].opcode;
+	int_file << setw(10) << left << code_table[i].operand << endl;
+	//listing << setw(8) << left << upper_case(obc) << endl;
+}
+
+void write_comment_int(int i){
+	int_file  << left << setw(4) << i*5 << "     " << left << code_table[i].com_line << endl;
+}
 
 void get_lines(string asmfile){
 	int i=0;
@@ -70,6 +96,8 @@ void make_table(string asmfile){
 			operand="";
 			comment="";
 			//com_line="";
+		}
+		else if (all_of(line.begin(),line.end(),::isspace)){
 		}
 		else{
 			if (!isspace(line[0])){
@@ -105,7 +133,6 @@ void make_table(string asmfile){
 				comment+= " "+temp;
 			}
 		}
-		//printf("%s\n", com_line.c_str());
 		table_struct temp;
 		temp.label=label;
 		temp.opcode=opcode;
@@ -118,7 +145,8 @@ void make_table(string asmfile){
 
 
 int pass1(string asmfile){
-	LOCCTR=0; // for good measure
+	int_file.open(asmfile+".int");
+	LOCCTR=0;
 	make_table(asmfile);
 	//return 0;
 	int i=0;
@@ -126,19 +154,20 @@ int pass1(string asmfile){
 	while (code_table[j].com_line[0]=='.'){
 		code_table[j].loc=0;
 		j++;
-
 	}
+
 	if (code_table[j].opcode=="START"){
 		LOCCTR=stoi(code_table[j].operand,nullptr,16);
 		code_table[j].loc=LOCCTR;
 		i=j+1;
+		write_line_int(j);
 	}
 
 	for ( ; i<code_table.size(); i++){
 		if (code_table[i].opcode=="END"){
 			code_table[i].loc=LOCCTR;
 			int li=0;
-			for (auto temp : LITTAB){
+			for (pair<string,littab_struct> temp : LITTAB){
 				string lit;
 				lit = temp.first;
 				
@@ -153,23 +182,20 @@ int pass1(string asmfile){
 					LOCCTR+=LITTAB[lit].length;
 					i++;
 				}
-				cout << lit << " " << hex << LITTAB[lit].loc<< endl ;
 			}
+			write_line_int(i);
 			break;
 		}
 		code_table[i].loc=LOCCTR;
 		int isLit=0;
 		if (code_table[i].operand[0] == '='){
 			string temp;
-			cout << "LIT\n";
 			temp = code_table[i].operand;
 			if (temp[2]=='\'' and temp[temp.length()-1] == '\'' and (temp[1] == 'X' or temp[1] == 'C')){
 				if (!LITTAB[temp].found){
 					LITTAB[temp].found=1;
-					cout << "LIT\n";
 					if (temp[1]=='X'){
 						LITTAB[temp].length = (temp.length()-4+1)/2;
-						cout << LITTAB[temp].length;
 					}
 					else{
 						LITTAB[temp].length = (temp.length()-4);	
@@ -182,6 +208,7 @@ int pass1(string asmfile){
 			
 			if (SYMTAB.count(code_table[i].label) > 0 ){
 				SYMTAB[code_table[i].label].e=1;
+				error_file << "Error at line " << i+1 << ": " << "Symbol redefinition \'" << code_table[i].label << '\'' << endl;
 			}
 			else {
 				symtab_struct temp;
@@ -194,15 +221,13 @@ int pass1(string asmfile){
 		if (code_table[i].opcode != ""){
 			int f=0;
 			if (OPTAB[code_table[i].opcode] != 0 and DIRECTIVES[code_table[i].opcode] == 0){
-				//printf("%s %d\n", code_table[i].opcode.c_str(),OPTAB.count(code_table[i].opcode));
+				
 				LOCCTR+=OPTAB[code_table[i].opcode];
 			}
 			else if (code_table[i].opcode == "WORD"){
-				//printf("%d\n", LOCCTR);
 				LOCCTR+=3;
 			}
 			else if (code_table[i].opcode == "RESW"){
-				//printf("%d\n", LOCCTR);
 				LOCCTR+=stoi(code_table[i].operand)*3;
 			}
 			else if (code_table[i].opcode == "RESB"){
@@ -218,12 +243,28 @@ int pass1(string asmfile){
 					LOCCTR+=(temp.length()-2)/2;
 				}
 			}
+			else if (code_table[i].opcode == "EQU"){
+				if (is_num(code_table[i].operand)){
+					SYMTAB[code_table[i].label].loc = stoi(code_table[i].operand);
+				}	
+				else if(code_table[i].operand=="*"){
+					SYMTAB[code_table[i].label].loc = LOCCTR;
+				}
+				/*
+				else if(is_expression(code_table[i].operand)){
+
+				}
+				*/
+			}
 			else if (code_table[i].opcode == "BASE"){
+
+			}
+			else if (code_table[i].opcode == "NOBASE"){
 
 			}
 			else if (code_table[i].opcode == "LTORG"){
 				int li=0;
-				for (auto temp : LITTAB){
+				for (pair<string,littab_struct> temp : LITTAB){
 					string lit;
 					lit = temp.first;
 					if (LITTAB[lit].found and !LITTAB[lit].written){
@@ -239,10 +280,13 @@ int pass1(string asmfile){
 				}
 			}
 			else{
-				printf("%s\n",code_table[i].opcode.c_str());
+				error_file << "Error at line " << i+1 << ": " << "Invalid opcode \'" << code_table[i].opcode << '\'' << endl;
 				PASS1_E = 1;
 			}
+			write_line_int(i);
 		}
-
+		else{
+			write_comment_int(i);
+		}	
 	}
 }
