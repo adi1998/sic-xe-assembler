@@ -54,7 +54,7 @@ string int_hex(int n, int width){
 
 
 void write_line(int i, string obc){
-	listing << setw(4) << left << i*5;
+	listing << setw(4) << left << i*5 << " ";
 	listing << setw(4) << setfill('0') << right << hex << code_table[i].loc << " " << setfill(' ')  << dec;
 	listing << setw(8) << left << code_table[i].label;
 	listing << setw(8) << left << code_table[i].opcode;
@@ -64,14 +64,14 @@ void write_line(int i, string obc){
 
 
 void write_line(int i){
-	listing << setw(9) << left << i*5;
+	listing << setw(9) << left << i*5 << " ";
 	listing << setw(8) << left << code_table[i].label;
 	listing << setw(8) << left << code_table[i].opcode;
 	listing << setw(8) << left << code_table[i].operand << endl;
 }
 
 void write_comment(int i){
-	listing  << left << setw(4) << i*5 << "     " << left << code_table[i].com_line << endl;
+	listing  << left << setw(4) << i*5 << "      " << left << code_table[i].com_line << endl;
 }
 
 
@@ -205,15 +205,17 @@ void pass2(string asmfile){
 				else{
 					asm_code = (OPCODETAB[opcode] << 8) ;	
 				}
-				if (ops.size()==2 and (REGISTERS[ops[0]] or ops[0]=="A") and (is_num(ops[1]) and opcode.substr(5)=="SHIFT")){
-					asm_code = (OPCODETAB[opcode] << 8) + (REGISTERS[ops[0]] << 4) + stoi(ops[1])-1;
-				}
-				else if (ops.size()==1 and (REGISTERS[ops[0]] or ops[0]=="A")){
-					//error
-					asm_code = (OPCODETAB[opcode] << 8) + (REGISTERS[ops[0]] << 4);
-				}
-				else {
-					asm_code = (OPCODETAB[opcode] << 8) ;	
+				if (opcode.substr(3)=="SHI"){
+					if (ops.size()==2 and (REGISTERS[ops[0]] or ops[0]=="A") and (is_num(ops[1]) and opcode.substr(5)=="SHIFT")){
+						asm_code = (OPCODETAB[opcode] << 8) + (REGISTERS[ops[0]] << 4) + stoi(ops[1])-1;
+					}
+					else if (ops.size()==1 and (REGISTERS[ops[0]] or ops[0]=="A")){
+						//error
+						asm_code = (OPCODETAB[opcode] << 8) + (REGISTERS[ops[0]] << 4);
+					}
+					else {
+						asm_code = (OPCODETAB[opcode] << 8) ;	
+					}
 				}
 				code_table[idx].asm_code=int_hex(asm_code,2*2);
 			}
@@ -228,6 +230,11 @@ void pass2(string asmfile){
 				}
 				else{
 					code_table[idx].asm_code=(opcode.substr(3,opcode.length()-4));
+				}
+			}
+			else if (opcode[0]=='=' and opcode[1]=='*'){
+				if (LITTAB[opcode].found==1){
+					code_table[idx].asm_code=int_hex(LITTAB[opcode].value,6);
 				}
 			}
 			else if (opcode=="WORD"){

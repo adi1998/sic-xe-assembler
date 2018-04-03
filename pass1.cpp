@@ -1,11 +1,15 @@
 #include <bits/stdc++.h>
 
 #include "tables.cpp"
+#include "infix.cpp"
 
 using namespace std;
 
 ofstream error_file;
 ofstream int_file;
+
+string int_hex(int n, int width);
+
 
 struct symtab_struct{
 	bool e;
@@ -18,6 +22,7 @@ struct littab_struct{
 	int found;
 	int length;
 	int written;
+	int value;
 	littab_struct(){
 		length=found=written=0;
 
@@ -53,8 +58,59 @@ vector<string> codeLines;
 vector<table_struct> code_table;
 
 
+pair<int,int> eval_expression(string exp){
+	char* temp;
+	string expcopy;
+	expcopy = exp+"";
+	temp = strtok((char*)exp.c_str(), " \t+-*/");
+	vector<string> v;
+	while (temp != NULL){
+		v.push_back(temp);
+		temp = strtok(NULL," \t+-*/");
+	}
+	for (auto it:v){
+		cout << it << endl;
+	}
+	vector<string> symbols;
+	int i=0;
+	int x=0;
+	while (i<v.size()-1 and x<exp.length()){
+		if (expcopy[x]=='*' or expcopy[x]=='/' or expcopy[x]=='+' or expcopy[x]=='-'){
+			if (!(SYMTAB[v[i]].y==1 or is_num(v[i]))){
+				return make_pair(0,1);
+			}
+			if (!is_num(v[i])){
+				symbols.push_back(to_string(SYMTAB[v[i]].loc));
+			}
+			else{
+				symbols.push_back(v[i]);	
+			}
+			symbols.push_back(expcopy.substr(x,1));
+			//cout << "LEL" << expcopy.substr(x,1) << endl;
+			i++;
+		}
+		cout << i<< " " << x << ":" << expcopy[x] << " " << v[i] << endl;
+		x++;
+	}
+	if (!is_num(v[i])){
+		symbols.push_back(to_string(SYMTAB[v[i]].loc));
+	}
+	else{
+		symbols.push_back(v[i]);	
+	}
+	string final_exp;
+	for (string it:symbols){
+		final_exp+=it;
+	}
+	cout << final_exp << "=";
+	int result;
+	result = EvaluateString(final_exp).getResult();
+	cout << result << endl;
+	return make_pair(result,0);
+}
+
 void write_line_int(int i){
-	int_file << setw(4) << left << i*5;
+	int_file << setw(4) << left << i*5 << " ";
 	int_file << setw(4) << setfill('0') << right << hex << code_table[i].loc << " " << setfill(' ')  << dec;
 	int_file << setw(8) << left << code_table[i].label;
 	int_file << setw(8) << left << code_table[i].opcode;
@@ -63,7 +119,7 @@ void write_line_int(int i){
 }
 
 void write_comment_int(int i){
-	int_file  << left << setw(4) << i*5 << "     " << left << code_table[i].com_line << endl;
+	int_file  << left << setw(4) << i*5 << "      " << left << code_table[i].com_line << endl;
 }
 
 void get_lines(string asmfile){
@@ -188,6 +244,11 @@ int pass1(string asmfile){
 		}
 		code_table[i].loc=LOCCTR;
 		int isLit=0;
+		if (code_table[i].operand=="*"){
+			SYMTAB["*"+int_hex(LOCCTR,6)].loc=LOCCTR;
+			SYMTAB["*"+int_hex(LOCCTR,6)].y=1;
+			code_table[i].operand = "*"+int_hex(LOCCTR,6);
+		}
 		if (code_table[i].operand[0] == '='){
 			string temp;
 			temp = code_table[i].operand;
@@ -202,6 +263,15 @@ int pass1(string asmfile){
 					}
 					isLit=1;
 				}
+			}
+			else if (temp[1]=='*' and temp.length()==2){
+
+				temp = temp + int_hex(LOCCTR,6);
+				code_table[i].operand=temp;
+				LITTAB[temp].found=1;
+				LITTAB[temp].length = 3;
+				LITTAB[temp].value=LOCCTR;
+				isLit=1;
 			}
 		}
 		if (code_table[i].label != ""){
@@ -244,17 +314,22 @@ int pass1(string asmfile){
 				}
 			}
 			else if (code_table[i].opcode == "EQU"){
-				if (is_num(code_table[i].operand)){
-					SYMTAB[code_table[i].label].loc = stoi(code_table[i].operand);
-				}	
-				else if(code_table[i].operand=="*"){
+				pair<int,int> exp_val=eval_expression(code_table[i].operand);
+				//cout << "EQU " <<  
+				if(code_table[i].operand[0]=='*'){
 					SYMTAB[code_table[i].label].loc = LOCCTR;
+					code_table[i].loc=LOCCTR;
 				}
-				/*
-				else if(is_expression(code_table[i].operand)){
-
+				else if (exp_val.second==0){
+					SYMTAB[code_table[i].label].loc = exp_val.first;
+					code_table[i].loc=exp_val.first;
+				}	
+				
+				else{
+					SYMTAB[code_table[i].label].loc = exp_val.first;
+					error_file << "Error at line " << i+1 << ": " << "Invalid expression \'" << code_table[i].operand << '\'' << endl;
 				}
-				*/
+				
 			}
 			else if (code_table[i].opcode == "BASE"){
 
