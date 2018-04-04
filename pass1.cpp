@@ -68,9 +68,6 @@ pair<int,int> eval_expression(string exp){
 		v.push_back(temp);
 		temp = strtok(NULL," \t+-*/");
 	}
-	for (auto it:v){
-		cout << it << endl;
-	}
 	vector<string> symbols;
 	int i=0;
 	int x=0;
@@ -86,10 +83,8 @@ pair<int,int> eval_expression(string exp){
 				symbols.push_back(v[i]);	
 			}
 			symbols.push_back(expcopy.substr(x,1));
-			//cout << "LEL" << expcopy.substr(x,1) << endl;
 			i++;
 		}
-		cout << i<< " " << x << ":" << expcopy[x] << " " << v[i] << endl;
 		x++;
 	}
 	if (!is_num(v[i])){
@@ -102,10 +97,8 @@ pair<int,int> eval_expression(string exp){
 	for (string it:symbols){
 		final_exp+=it;
 	}
-	cout << final_exp << "=";
 	int result;
 	result = EvaluateString(final_exp).getResult();
-	cout << result << endl;
 	return make_pair(result,0);
 }
 
@@ -218,7 +211,8 @@ int pass1(string asmfile){
 		i=j+1;
 		write_line_int(j);
 	}
-
+	bool isOrg=false;
+	int lastLoc;
 	for ( ; i<code_table.size(); i++){
 		if (code_table[i].opcode=="END"){
 			code_table[i].loc=LOCCTR;
@@ -330,6 +324,31 @@ int pass1(string asmfile){
 					error_file << "Error at line " << i+1 << ": " << "Invalid expression \'" << code_table[i].operand << '\'' << endl;
 				}
 				
+			}
+			else if (code_table[i].opcode == "ORG"){
+				pair<int,int> exp_val=eval_expression(code_table[i].operand);
+				if (code_table[i].operand==""){
+					if (isOrg){
+						isOrg=false;
+						LOCCTR=lastLoc;
+					}
+					else{
+						LOCCTR = code_table[i-1].loc;
+						isOrg = true;
+					}
+				}
+				else if(exp_val.second==0 and !isOrg){
+					lastLoc=LOCCTR;
+					LOCCTR=exp_val.first;
+					isOrg=true;
+				}
+				else if(exp_val.second==0 and isOrg){
+					LOCCTR=exp_val.first;
+					isOrg=false;
+				}
+				else{
+					error_file << "Error at line " << i+1 << ": " << "Invalid expression \'" << code_table[i].operand << '\'' << endl;
+				}
 			}
 			else if (code_table[i].opcode == "BASE"){
 
