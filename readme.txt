@@ -1,1 +1,3 @@
-g++ -std=gnu++11 pass2.cpp -o sicasm
+g++ -std=gnu++14 sicasm.cpp -o sicasm
+
+Usage: sicasm <input-file>
