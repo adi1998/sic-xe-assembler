@@ -1,7 +1,7 @@
-#include <bits/stdc++.h>
-using namespace std;
+#include <map>
+#include <string>
 
-map<string, int> static OPTAB = {
+std::map<std::string, int> static OPTAB = {
 	{"ADD", 3},
 	{"ADDF", 3},
 	{"ADDR", 2},
@@ -105,7 +105,7 @@ map<string, int> static OPTAB = {
 	{"+WD", 4},
 };
 
-map<string,int> DIRECTIVES = {
+std::map<std::string,int> DIRECTIVES = {
 	{"START",1},
 	{"RESW",1},
 	{"RESB",1},
@@ -119,7 +119,7 @@ map<string,int> DIRECTIVES = {
 	{"LTORG",1}
 };
 
-map<string, int> OPCODETAB = {
+std::map<std::string, int> OPCODETAB = {
 	{"ADD",0x18},
 	{"ADDF",0x58},
 	{"ADDR",0x90},
@@ -181,7 +181,7 @@ map<string, int> OPCODETAB = {
 	{"WD",0xDC}
 };
 
-map<string, int> REGISTERS{
+std::map<std::string, int> REGISTERS{
 	{"A",0},
 	{"T",5},
 	{"B",3},
