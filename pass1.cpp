@@ -1,4 +1,7 @@
 #include <bits/stdc++.h>
+#include<iostream>
+#include<string>
+#include<math.h>
 
 #include "tables.cpp"
 #include "infix.cpp"
